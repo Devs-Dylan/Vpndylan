@@ -1,0 +1,30 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.5
+      - name: Décompresser le projet
+        run: |
+          mkdir src_project
+          unzip -q DYLAN_VPN.zip -d src_project
+          DIR=$(dirname "$(find src_project -name settings.gradle.kts | head -1)")
+          echo "DIR=$DIR" >> $GITHUB_ENV
+      - name: Compiler l'APK
+        run: cd "$DIR" && gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DYLAN_VPN-debug
+          path: ${{ env.DIR }}/app/build/outputs/apk/debug/*.apk
