@@ -1,0 +1,73 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.5
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Décompresser le projet
+        run: |
+          mkdir -p src_project
+          unzip -q DYLAN_VPN.zip -d src_project
+          DIR=\( (dirname " \)(find src_project -name settings.gradle.kts -o -name settings.gradle | head -1)")
+          if [ -z "$DIR" ] || [ "$DIR" = "." ]; then
+            echo "Impossible de trouver settings.gradle(.kts)"
+            exit 1
+          fi
+          echo "DIR=$DIR" >> $GITHUB_ENV
+          echo "Projet trouvé dans : $DIR"
+
+      - name: Compiler l'APK
+        run: |
+          cd "$DIR"
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace
+          fi
+
+      - name: Publier l'APK dans Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK_PATH=$(find "$DIR" -path "*/outputs/apk/debug/*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Aucun APK debug trouvé"
+            exit 1
+          fi
+          cp "$APK_PATH" DylanVPN.apk
+          ls -lh DylanVPN.apk
+
+          gh release delete latest --yes --cleanup-tag --repo "${{ github.repository }}" || true
+          gh release create latest \
+            DylanVPN.apk \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "DYLAN VPN (dernier build)" \
+            --notes "APK debug généré automatiquement depuis le commit ${{ github.sha }}"
