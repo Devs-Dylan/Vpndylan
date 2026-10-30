@@ -1,5 +1,4 @@
 name: Build APK
-
 on:
   push:
     branches: [main]
@@ -20,18 +19,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.5
-      - name: Décompresser le projet
-        run: |
-          mkdir src_project
-          unzip -q DYLAN_VPN.zip -d src_project
-          DIR=\( (dirname " \)(find src_project -name settings.gradle.kts | head -1)")
-          echo "DIR=$DIR" >> $GITHUB_ENV
-      - name: Compiler l'APK
-        run: cd "$DIR" && gradle assembleDebug --no-daemon
-      - name: Publier l'APK dans Releases
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cp "$DIR/app/build/outputs/apk/debug/app-debug.apk" DylanVPN.apk
-          gh release delete latest --yes --cleanup-tag --repo ${{ github.repository }} || true
-          gh release create latest DylanVPN.apk --repo ${{ github.repository }} --target ${{ github.sha }} --title "DYLAN VPN (dernier build)" --notes "APK debug"
+      - name: Decompresser
+        run: unzip -q DYLAN_VPN.zip
+      - name: Compiler
+        run: cd DYLAN_VPN && gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DYLAN_VPN-debug
+          path: DYLAN_VPN/app/build/outputs/apk/debug/app-debug.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: DYLAN VPN (dernier build)
+          files: DYLAN_VPN/app/build/outputs/apk/debug/app-debug.apk
