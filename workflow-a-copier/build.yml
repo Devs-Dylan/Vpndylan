@@ -5,8 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# écriture nécessaire pour publier l'APK dans la release « latest » (utilisée par la mise à jour dans l'app)
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-${{ github.ref }}
@@ -25,7 +26,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.5
-      - name: Clé de signature depuis les secrets (facultatif)
+      - name: Clé de signature depuis les secrets
         env:
           KS_B64: ${{ secrets.DYLAN_KEYSTORE_B64 }}
           KS_PASS: ${{ secrets.DYLAN_KEYSTORE_PASSWORD }}
@@ -40,14 +41,19 @@ jobs:
             echo "DYLAN_KEY_PASSWORD=$KS_KEY_PASS" >> "$GITHUB_ENV"
             echo "Clé de signature : secrets du dépôt"
           elif [ -f app/dylan.keystore ]; then
-            echo "Clé de signature : dylan.keystore du projet (par défaut)"
+            echo "Clé de signature : dylan.keystore du projet"
           else
             echo "::error::Aucune clé de signature. Ajoute le secret DYLAN_KEYSTORE_B64 (voir README)."
             exit 1
           fi
-      - name: Build debug APK
+      - name: Compiler
         run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: DYLAN_VPN-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: DYLAN VPN (dernier build)
+          files: app/build/outputs/apk/debug/app-debug.apk
