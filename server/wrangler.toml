@@ -1,0 +1,8 @@
+name = "dylan-vpn-server"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+GH_OWNER = "Devs-Dylan"
+GH_REPO = "Vpndylan"
+GH_BRANCH = "vpn-data"

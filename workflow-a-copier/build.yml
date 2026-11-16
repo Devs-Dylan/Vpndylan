@@ -1,0 +1,53 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.5
+      - name: Clé de signature depuis les secrets (facultatif)
+        env:
+          KS_B64: ${{ secrets.DYLAN_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.DYLAN_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.DYLAN_KEY_ALIAS }}
+          KS_KEY_PASS: ${{ secrets.DYLAN_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/dylan.keystore"
+            echo "DYLAN_KEYSTORE_FILE=$RUNNER_TEMP/dylan.keystore" >> "$GITHUB_ENV"
+            echo "DYLAN_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "DYLAN_KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "DYLAN_KEY_PASSWORD=$KS_KEY_PASS" >> "$GITHUB_ENV"
+            echo "Clé de signature : secrets du dépôt"
+          elif [ -f app/dylan.keystore ]; then
+            echo "Clé de signature : dylan.keystore du projet (par défaut)"
+          else
+            echo "::error::Aucune clé de signature. Ajoute le secret DYLAN_KEYSTORE_B64 (voir README)."
+            exit 1
+          fi
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DYLAN_VPN-debug
+          path: app/build/outputs/apk/debug/*.apk
