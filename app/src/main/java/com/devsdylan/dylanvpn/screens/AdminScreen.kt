@@ -1010,6 +1010,7 @@ private fun GitTab() {
     var hasToken by remember { mutableStateOf(Repository.hasWriteToken()) }
     var info by remember { mutableStateOf("") }
     var showInit by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
 
     Column(
         modifier = Modifier
@@ -1018,6 +1019,35 @@ private fun GitTab() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        AdminCard {
+            Text("Serveur d'inscription", style = MaterialTheme.typography.titleMedium, color = Pal.Text)
+            Text(
+                "Pour que le serveur crée des comptes « basic » seul, enregistre ces clés comme secrets de ton Worker " +
+                    "(BASIC_KEY, et USERS_KEY pour les configs personnelles). Ne les partage avec personne d'autre.",
+                color = Pal.Sub
+            )
+            Row {
+                TextButton(onClick = {
+                    val key = Account.keys["basic"]
+                    info = if (key == null) {
+                        "Clé basic indisponible : connecte-toi avec le compte admin après l'initialisation"
+                    } else {
+                        clipboard.setText(AnnotatedString(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key)))
+                        "BASIC_KEY copiée dans le presse-papiers"
+                    }
+                }) { Text("Copier BASIC_KEY") }
+                TextButton(onClick = {
+                    val key = Account.keys["users"]
+                    info = if (key == null) {
+                        "Clé users indisponible : connecte-toi avec le compte admin après l'initialisation"
+                    } else {
+                        clipboard.setText(AnnotatedString(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key)))
+                        "USERS_KEY copiée dans le presse-papiers"
+                    }
+                }) { Text("Copier USERS_KEY") }
+            }
+        }
+
         AdminCard {
             Text("Dépôt", style = MaterialTheme.typography.titleMedium, color = Pal.Text)
             Text(Repository.OWNER + "/" + Repository.REPO + " · branche " + Repository.BRANCH, color = Pal.Sub)

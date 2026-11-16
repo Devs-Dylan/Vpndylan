@@ -54,7 +54,8 @@ object Keyring {
     /** Ouvre l'enveloppe d'un utilisateur ; null si le mot de passe est faux. */
     fun unwrap(line: UserLine, password: String): Grant? {
         return try {
-            val key = deriveKey(line.login, password, unb64(line.salt))
+            val (salt, iterations) = splitSalt(line.salt)
+            val key = deriveKey(line.login, password, salt, iterations)
             val plain = gcmDecrypt(key, aad(line.login, line.category), unb64(line.blob)) ?: return null
             val json = JSONObject(String(plain, Charsets.UTF_8))
             val keysJson = json.optJSONObject("k") ?: return null
@@ -135,8 +136,20 @@ object Keyring {
     private fun aad(login: String, category: String): ByteArray =
         ("dylan-user|" + login + "|" + category).toByteArray(Charsets.UTF_8)
 
-    private fun deriveKey(login: String, password: String, salt: ByteArray): ByteArray {
-        val spec = PBEKeySpec((login + ":" + password).toCharArray(), salt, ITERATIONS, 256)
+    /**
+     * Le champ « sel » d'une ligne peut porter son nombre d'itérations : « sel~100000 ».
+     * Sans suffixe, c'est ITERATIONS (anciennes lignes). Le serveur d'inscription utilise 100 000,
+     * le maximum accepté par Cloudflare Workers.
+     */
+    private fun splitSalt(field: String): Pair<ByteArray, Int> {
+        val i = field.indexOf('~')
+        if (i < 0) return Pair(unb64(field), ITERATIONS)
+        val iterations = field.substring(i + 1).toIntOrNull()?.takeIf { it in 10_000..1_000_000 } ?: ITERATIONS
+        return Pair(unb64(field.substring(0, i)), iterations)
+    }
+
+    private fun deriveKey(login: String, password: String, salt: ByteArray, iterations: Int = ITERATIONS): ByteArray {
+        val spec = PBEKeySpec((login + ":" + password).toCharArray(), salt, iterations, 256)
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
     }
 

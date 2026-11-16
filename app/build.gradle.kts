@@ -19,6 +19,19 @@ val gitReadToken: String = run {
     raw.filter { it.isLetterOrDigit() || it == '_' || it == '-' }
 }
 
+// Adresse du serveur d'inscription (publique, pas un secret). Source : propriété Gradle, variable d'environnement
+// SERVER_URL, ou fichier server_url.txt à la racine du dépôt.
+val serverUrl: String = run {
+    val raw = (project.findProperty("SERVER_URL") as String?)?.trim()
+        ?: System.getenv("SERVER_URL")?.trim()
+        ?: listOf(
+            File(rootProject.projectDir, "server_url.txt"),
+            File(rootProject.projectDir.parentFile, "server_url.txt")
+        ).firstOrNull { it.exists() }?.readText()?.trim()
+        ?: ""
+    raw.filter { it.isLetterOrDigit() || it in ":/.-_" }
+}
+
 android {
     namespace = "com.devsdylan.dylanvpn"
     compileSdk = 34
@@ -28,9 +41,10 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.3.2"
+        versionName = "1.3.3"
         buildConfigField("long", "BUILD_TIME", System.currentTimeMillis().toString() + "L")
         buildConfigField("String", "GIT_READ_TOKEN", "\"" + gitReadToken + "\"")
+        buildConfigField("String", "SERVER_URL", "\"" + serverUrl + "\"")
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
