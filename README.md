@@ -74,9 +74,10 @@ Le core Xray (`libv2ray.aar`, ~60 Mo) est téléchargé automatiquement par Grad
   le workflow les utilise automatiquement. Changer de clé oblige à désinstaller l'ancienne version une seule fois.
 - Le workflow tourne en lecture seule (`permissions: contents: read`) et annule les builds en double.
 
-## Inscription depuis l'app (v1.3.3)
+## Inscription et chat (v1.3.4)
 - Écran de connexion : bouton « Créer un compte » (nom, mot de passe, numéro). Il n'apparaît que si `server_url.txt` existe à la racine
   du dépôt au moment du build.
 - Le serveur (dossier `server/`) vérifie que le nom est libre, crée le compte « basic » et l'écrit dans `vpn/users.txt` : l'app se
   connecte ensuite avec le mécanisme habituel. Voir `server/LISEZMOI.md`.
-- Une seule session par compte et le chat arrivent à l'étape suivante.
+- Chat (menu Plus → Chat) : salon commun et messages privés chiffrés, réservé aux comptes créés depuis l'app. Une nouvelle connexion
+  déconnecte l'ancien appareil du chat. L'admin (sans compte de chat) voit la liste des comptes et leurs informations.

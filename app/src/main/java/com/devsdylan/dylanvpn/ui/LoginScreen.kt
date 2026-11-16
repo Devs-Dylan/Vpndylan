@@ -152,7 +152,7 @@ fun LoginScreen() {
                 scope.launch {
                     val problem = withContext(Dispatchers.IO) {
                         if (!registering) {
-                            Account.login(login, password)
+                            signIn(login, password)
                         } else if (password != confirm) {
                             "Les deux mots de passe ne correspondent pas"
                         } else {
@@ -161,11 +161,11 @@ fun LoginScreen() {
                                 created.message
                             } else {
                                 // GitHub peut mettre un instant à publier la nouvelle ligne : on réessaie quelques fois
-                                var result: String? = Account.login(login, password)
+                                var result: String? = signIn(login, password)
                                 var attempts = 0
                                 while (result != null && attempts < 4) {
                                     Thread.sleep(2_000)
-                                    result = Account.login(login, password)
+                                    result = signIn(login, password)
                                     attempts++
                                 }
                                 result
@@ -195,4 +195,11 @@ fun LoginScreen() {
             }
         }
     }
+}
+
+/** Connexion au compte, puis ouverture de la session du chat (sans conséquence si le compte n'y a pas droit). */
+private fun signIn(login: String, password: String): String? {
+    val problem = Account.login(login, password)
+    if (problem == null && AuthClient.configured) AuthClient.login(login, password)
+    return problem
 }

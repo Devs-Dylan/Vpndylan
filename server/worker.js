@@ -254,16 +254,114 @@ async function login(env, body) {
   if ((await putUser(env, name, u, found.sha)) === "conflict") {
     return json({ error: "Réessaie dans un instant" }, 409);
   }
+  // les appels du chat vérifient la session dans D1 (pas dans GitHub : trop lent et limité)
+  if (env.DB) {
+    await env.DB.prepare("INSERT OR REPLACE INTO sessions (name, token_hash, device_id, at) VALUES (?, ?, ?, ?)")
+      .bind(name, u.session.tokenHash, deviceId, u.session.at)
+      .run();
+  }
   return json({ ok: true, token });
 }
 
 // L'app appelle ceci régulièrement : si un autre appareil s'est connecté, valid = false.
 async function session(env, body) {
   const name = String(body.name || "").trim().toLowerCase();
+  if (env.DB) return json({ valid: await sessionValid(env, name, body.token) });
   const found = NAME_RE.test(name) ? await getUser(env, name) : null;
   const s = found && found.data.session;
   const valid = !!s && safeEqual(s.tokenHash, await sha256Hex(String(body.token || "")));
   return json({ valid });
+}
+
+// ----- chat -----
+
+const MAX_BODY = 6000;
+const B64U_RE = /^[A-Za-z0-9_-]+$/;
+
+async function sessionValid(env, name, token) {
+  if (!NAME_RE.test(name) || !token) return false;
+  const row = await env.DB.prepare("SELECT token_hash FROM sessions WHERE name = ?").bind(name).first();
+  return !!row && safeEqual(row.token_hash, await sha256Hex(String(token)));
+}
+
+// Retourne le nom si la session est valide, sinon une réponse 401 (« session » = ouverte ailleurs ou expirée).
+async function chatAuth(env, body) {
+  if (!env.DB) return { response: json({ error: "Chat non configuré" }, 503) };
+  const name = String(body.name || "").trim().toLowerCase();
+  if (!(await sessionValid(env, name, body.token))) return { response: json({ error: "session" }, 401) };
+  return { name };
+}
+
+async function chatKeyPut(env, body) {
+  const a = await chatAuth(env, body);
+  if (a.response) return a.response;
+  const pub = String(body.pub || "");
+  if (!B64U_RE.test(pub) || pub.length < 80 || pub.length > 200) return json({ error: "Clé publique invalide" }, 400);
+  await env.DB.prepare("INSERT OR REPLACE INTO pubkeys (name, pub, at) VALUES (?, ?, ?)").bind(a.name, pub, Date.now()).run();
+  return json({ ok: true });
+}
+
+async function chatKeyGet(env, body) {
+  const a = await chatAuth(env, body);
+  if (a.response) return a.response;
+  const user = String(body.user || "").trim().toLowerCase();
+  if (!NAME_RE.test(user)) return json({ error: "Utilisateur invalide" }, 400);
+  const row = await env.DB.prepare("SELECT pub FROM pubkeys WHERE name = ?").bind(user).first();
+  if (!row) return json({ error: "Cet utilisateur n'a pas encore ouvert le chat" }, 404);
+  return json({ pub: row.pub });
+}
+
+async function chatUsers(env, body) {
+  const a = await chatAuth(env, body);
+  if (a.response) return a.response;
+  const rows = await env.DB.prepare("SELECT name FROM pubkeys WHERE name != ? ORDER BY name LIMIT 300").bind(a.name).all();
+  return json({ users: rows.results.map((r) => r.name) });
+}
+
+async function chatSend(env, body) {
+  const a = await chatAuth(env, body);
+  if (a.response) return a.response;
+  const to = String(body.to || "").trim().toLowerCase();
+  const text = String(body.body || "");
+  if (!text || text.length > MAX_BODY || !B64U_RE.test(text)) return json({ error: "Message invalide" }, 400);
+
+  let room = "general";
+  let recipient = null;
+  if (to !== "general") {
+    if (!NAME_RE.test(to) || to === a.name) return json({ error: "Destinataire invalide" }, 400);
+    const exists = await env.DB.prepare("SELECT 1 AS ok FROM pubkeys WHERE name = ?").bind(to).first();
+    if (!exists) return json({ error: "Destinataire inconnu" }, 404);
+    room = "dm";
+    recipient = to;
+  }
+  const now = Date.now();
+  const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE sender = ? AND ts > ?").bind(a.name, now - 60000).first();
+  if (recent && recent.n >= 30) return json({ error: "Trop de messages, patiente une minute" }, 429);
+
+  const res = await env.DB.prepare("INSERT INTO messages (room, sender, recipient, ts, body) VALUES (?, ?, ?, ?, ?)")
+    .bind(room, a.name, recipient, now, text)
+    .run();
+  if (Math.random() < 0.02) {
+    await env.DB.prepare("DELETE FROM messages WHERE ts < ?").bind(now - 30 * 24 * 3600 * 1000).run();
+  }
+  return json({ ok: true, id: res.meta.last_row_id, ts: now });
+}
+
+// since_general / since_dm : derniers identifiants déjà reçus. Renvoie les nouveaux messages du salon
+// et les privés où l'utilisateur est expéditeur ou destinataire.
+async function chatPoll(env, body) {
+  const a = await chatAuth(env, body);
+  if (a.response) return a.response;
+  const sg = Math.max(0, Number(body.sinceGeneral) || 0);
+  const sd = Math.max(0, Number(body.sinceDm) || 0);
+  const rows = await env.DB.prepare(
+    "SELECT id, room, sender, recipient, ts, body FROM messages " +
+      "WHERE (room = 'general' AND id > ?) OR (room = 'dm' AND id > ? AND (recipient = ? OR sender = ?)) " +
+      "ORDER BY id LIMIT 200"
+  )
+    .bind(sg, sd, a.name, a.name)
+    .all();
+  return json({ messages: rows.results });
 }
 
 // Admin : métadonnées seulement (jamais le mot de passe, jamais le numéro complet).
@@ -285,6 +383,16 @@ async function adminUser(env, request, body) {
   });
 }
 
+async function adminUsers(env, request) {
+  const key = request.headers.get("x-admin-key") || "";
+  if (!env.ADMIN_KEY || !safeEqual(key, env.ADMIN_KEY)) return json({ error: "Interdit" }, 403);
+  if (!env.DB) return json({ error: "Chat non configuré" }, 503);
+  const rows = await env.DB.prepare(
+    "SELECT p.name AS name, s.at AS lastSession FROM pubkeys p LEFT JOIN sessions s ON s.name = p.name ORDER BY p.name LIMIT 500"
+  ).all();
+  return json({ users: rows.results });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") return json({ error: "POST seulement" }, 405);
@@ -301,6 +409,12 @@ export default {
         case "/login": return await login(env, body);
         case "/session": return await session(env, body);
         case "/admin/user": return await adminUser(env, request, body);
+        case "/admin/users": return await adminUsers(env, request);
+        case "/chat/key/put": return await chatKeyPut(env, body);
+        case "/chat/key/get": return await chatKeyGet(env, body);
+        case "/chat/users": return await chatUsers(env, body);
+        case "/chat/send": return await chatSend(env, body);
+        case "/chat/poll": return await chatPoll(env, body);
         default: return json({ error: "Route inconnue" }, 404);
       }
     } catch (e) {

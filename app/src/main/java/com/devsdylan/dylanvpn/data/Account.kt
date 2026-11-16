@@ -2,6 +2,8 @@ package com.devsdylan.dylanvpn.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.devsdylan.dylanvpn.core.AuthClient
+import com.devsdylan.dylanvpn.core.ChatRepository
 import com.devsdylan.dylanvpn.core.GitHubException
 import com.devsdylan.dylanvpn.core.Keyring
 import com.devsdylan.dylanvpn.core.Secrets
@@ -98,6 +100,8 @@ object Account {
         _notice.value = reason
         prefs?.edit()?.clear()?.apply()
         SecureStore.put("session_keys", null)
+        AuthClient.clearChat()
+        ChatRepository.reset()
         AppLog.i("Déconnecté du compte")
     }
 

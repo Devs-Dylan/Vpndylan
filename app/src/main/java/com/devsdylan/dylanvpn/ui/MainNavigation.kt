@@ -27,6 +27,7 @@ import com.devsdylan.dylanvpn.data.AppLog
 import com.devsdylan.dylanvpn.screens.AboutScreen
 import com.devsdylan.dylanvpn.screens.AdminScreen
 import com.devsdylan.dylanvpn.screens.AppsScreen
+import com.devsdylan.dylanvpn.screens.ChatScreen
 import com.devsdylan.dylanvpn.screens.ConfigEditorScreen
 import com.devsdylan.dylanvpn.screens.ConfigsScreen
 import com.devsdylan.dylanvpn.screens.EditorHolder
@@ -67,13 +68,14 @@ private fun MainContent() {
         "guide" -> "Guide"
         "admin" -> "Administration"
         "update" -> "Mise à jour"
+        "chat" -> "Chat"
         "editor" -> "Éditeur de config"
         else -> "v" + BuildConfig.VERSION_NAME + " · " + Format.dateTime(BuildConfig.BUILD_TIME)
     }
     // l'onglet mis en avant dans la barre du bas pour les écrans secondaires
     val highlighted = when (route) {
         "editor" -> "configs"
-        "settings", "apps", "share", "about", "guide", "admin", "update" -> "more"
+        "settings", "apps", "share", "about", "guide", "admin", "update", "chat" -> "more"
         else -> route
     }
 
@@ -143,6 +145,7 @@ private fun MainContent() {
             composable("guide") { GuideScreen() }
             composable("admin") { AdminScreen() }
             composable("update") { UpdateScreen() }
+            composable("chat") { ChatScreen() }
             composable("editor") { ConfigEditorScreen(onDone = { navController.popBackStack() }) }
         }
     }

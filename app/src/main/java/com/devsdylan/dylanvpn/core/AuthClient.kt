@@ -1,6 +1,7 @@
 package com.devsdylan.dylanvpn.core
 
 import com.devsdylan.dylanvpn.BuildConfig
+import com.devsdylan.dylanvpn.data.SecureStore
 import com.devsdylan.dylanvpn.data.Store
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -13,7 +14,7 @@ object AuthClient {
 
     val configured: Boolean get() = BuildConfig.SERVER_URL.isNotEmpty()
 
-    private fun post(path: String, body: JSONObject): Pair<Int, JSONObject> {
+    fun post(path: String, body: JSONObject, headers: Map<String, String> = emptyMap()): Pair<Int, JSONObject> {
         val base = BuildConfig.SERVER_URL.trimEnd('/')
         val conn = URL(base + path).openConnection() as HttpURLConnection
         try {
@@ -22,6 +23,7 @@ object AuthClient {
             conn.readTimeout = 30_000
             conn.doOutput = true
             conn.setRequestProperty("content-type", "application/json")
+            for ((name, value) in headers) conn.setRequestProperty(name, value)
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
@@ -67,5 +69,34 @@ object AuthClient {
             .put("deviceId", Store.deviceId())
         val (code, json) = post("/register", body)
         if (code == 200 && json.optBoolean("ok")) Result(true, "Compte créé") else Result(false, json.optString("error", "Inscription refusée"))
+    }
+
+    // ----- session du chat : le jeton remplace celui de l'ancien appareil (une seule connexion par compte) -----
+
+    private const val TOKEN = "chat_token"
+    private const val USER = "chat_user"
+
+    fun chatToken(): String? = SecureStore.get(TOKEN)
+
+    fun chatUser(): String? = SecureStore.get(USER)
+
+    /** Ouvre la session du chat. Échoue sans conséquence pour les comptes qui n'ont pas été créés depuis l'app. */
+    fun login(name: String, password: String): Result = guarded {
+        val login = Keyring.normalizeLogin(name)
+        val body = JSONObject().put("name", login).put("password", password).put("deviceId", Store.deviceId())
+        val (code, json) = post("/login", body)
+        if (code == 200 && json.optBoolean("ok") && json.optString("token").isNotEmpty()) {
+            SecureStore.put(TOKEN, json.optString("token"))
+            SecureStore.put(USER, login)
+            Result(true, "")
+        } else {
+            Result(false, json.optString("error", "Connexion au chat impossible"))
+        }
+    }
+
+    fun clearChat() {
+        SecureStore.put(TOKEN, null)
+        SecureStore.put(USER, null)
+        ChatCrypto.clearKeys()
     }
 }

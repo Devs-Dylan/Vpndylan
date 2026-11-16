@@ -41,7 +41,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.3.3"
+        versionName = "1.3.4"
         buildConfigField("long", "BUILD_TIME", System.currentTimeMillis().toString() + "L")
         buildConfigField("String", "GIT_READ_TOKEN", "\"" + gitReadToken + "\"")
         buildConfigField("String", "SERVER_URL", "\"" + serverUrl + "\"")

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Info
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.devsdylan.dylanvpn.BuildConfig
+import com.devsdylan.dylanvpn.core.AuthClient
 import com.devsdylan.dylanvpn.data.Account
 import com.devsdylan.dylanvpn.data.Repository
 import com.devsdylan.dylanvpn.data.UpdateStatus
@@ -121,6 +123,9 @@ fun MoreScreen(onNavigate: (String) -> Unit) {
         }
 
         SectionLabel("À PROPOS")
+        if (AuthClient.configured) {
+            MoreItem(Icons.Default.Chat, "Chat", "Salon commun et messages privés entre utilisateurs") { onNavigate("chat") }
+        }
         MoreItem(Icons.Outlined.Description, "Guide", "Premiers pas et explications") { onNavigate("guide") }
         MoreItem(Icons.Default.Info, "Informations de version", "Application " + BuildConfig.VERSION_NAME) { onNavigate("about") }
         Spacer(Modifier.height(24.dp))

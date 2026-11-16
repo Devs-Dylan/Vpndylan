@@ -6,3 +6,9 @@ compatibility_date = "2026-11-01"
 GH_OWNER = "Devs-Dylan"
 GH_REPO = "Vpndylan"
 GH_BRANCH = "vpn-data"
+
+# Base du chat : wrangler d1 create dylan-chat, puis colle ici le database_id affiché
+[[d1_databases]]
+binding = "DB"
+database_name = "dylan-chat"
+database_id = "REMPLACE_PAR_TON_DATABASE_ID"
